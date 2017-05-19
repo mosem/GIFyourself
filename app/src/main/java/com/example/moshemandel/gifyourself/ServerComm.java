@@ -1,18 +1,23 @@
 package com.example.moshemandel.gifyourself;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Environment;
 import android.util.Log;
 import android.view.View;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
@@ -37,7 +42,7 @@ class ServerComm extends AsyncTask<String, Void, String> {
 
     public ServerComm(Context context) {
         mContext = context;
-        View mRootView = ((Activity) mContext).getWindow().getDecorView().findViewById(android.R.id.content);
+        mRootView = ((Activity) mContext).getWindow().getDecorView().findViewById(android.R.id.content);
         spinner = (ProgressBar) mRootView.findViewById(R.id.progressBar);
         spinner.setVisibility(View.VISIBLE);
 
@@ -58,18 +63,38 @@ class ServerComm extends AsyncTask<String, Void, String> {
         spinner.setVisibility(View.GONE);
 
         GifImageView gifImageView = (GifImageView) mRootView.findViewById(R.id.GifImageView);
-        gifImageView.setGifImageResource(R.drawable.simpsons);
+//        gifImageView.setGifImageResource(R.drawable.android);
+        File gifFile = new File(result);
+        Uri gifUri = Uri.fromFile(gifFile);
+        gifImageView.setGifImageUri(gifUri);
         gifImageView.setVisibility(View.VISIBLE);
+
+        Toast.makeText(mContext,"server returned",
+                Toast.LENGTH_SHORT).show();
+
+    }
+
+    private void shareImage(View view){
+        Uri uri = Uri.parse(view.getTag().toString() );
+        Intent intent = new Intent();
+        intent.setAction(Intent.ACTION_SEND);
+        intent.setType("image/*");
+
+        intent.putExtra(android.content.Intent.EXTRA_SUBJECT, "");
+        intent.putExtra(android.content.Intent.EXTRA_TEXT, "");
+        intent.putExtra(Intent.EXTRA_STREAM, uri);
+        try {
+            mContext.startActivity(Intent.createChooser(intent, "Share Screenshot"));
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(mContext, "No App Available", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private String execPost(String imagePath) throws IOException {
         final MediaType MEDIA_TYPE_JPG = MediaType.parse("image/jpeg");
-        File origFile = new File(imagePath);
-        String origFileSize = String.valueOf(origFile.length()/1024);
-//        String compressedImagePath = compressImage(imagePath);
+
         File inputFile = new File(imagePath);
-        String newFileSize = String.valueOf(origFile.length()/1024);
-        Log.d("ServerComm", origFileSize + ", " + newFileSize);
+
         Request request = null;
         Response response = null;
 
@@ -80,7 +105,7 @@ class ServerComm extends AsyncTask<String, Void, String> {
                 .readTimeout(1200, TimeUnit.SECONDS)
                 .build();
 
-
+        String gifPath = null;
         try {
             RequestBody requestBody = new MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
@@ -89,12 +114,30 @@ class ServerComm extends AsyncTask<String, Void, String> {
                     .build();
 
             request = new Request.Builder()
-                    .url("http://45.58.49.173:8000")
+                    .url("http://132.65.120.155:8000")
                     .post(requestBody)
                     .build();
 
             response = client.newCall(request).execute();
-            Log.d("ServerComm", response.toString() );
+            Log.d("ServerComm", response.toString());
+            InputStream is = response.body().byteStream();
+            BufferedInputStream input = new BufferedInputStream(is);
+            gifPath = getGIFpath();
+            File gifFile = new File(gifPath);
+            OutputStream output = new FileOutputStream(gifFile);
+            byte[] data = new byte[1024];
+
+            long total = 0;
+            int count;
+            while ((count = input.read(data)) != -1) {
+                total += count;
+                output.write(data, 0, count);
+            }
+
+            output.flush();
+            output.close();
+            input.close();
+
         } catch (Exception e) {
             response = client.newCall(request).execute();
 
@@ -120,24 +163,7 @@ class ServerComm extends AsyncTask<String, Void, String> {
 //            FileOutputStream out = new FileOutputStream(newFilePath);
 //            out.write(buffer.toByteArray());
 
-        return response.toString();
-    }
-
-    private String compressImage(String path) {
-        File dir=Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM);
-        Bitmap b= BitmapFactory.decodeFile(path);
-        Bitmap out = Bitmap.createScaledBitmap(b, 320, 480, false);
-        File file = new File(dir, "resize.png");
-        FileOutputStream fOut;
-        try {
-            fOut = new FileOutputStream(file);
-            out.compress(Bitmap.CompressFormat.PNG, 100, fOut);
-            fOut.flush();
-            fOut.close();
-            b.recycle();
-            out.recycle();
-        } catch (Exception e) {}
-        return file.getAbsolutePath();
+        return gifPath;
     }
 
 
@@ -342,13 +368,35 @@ class ServerComm extends AsyncTask<String, Void, String> {
         String gifFileName = "GIF_" + timeStamp + "_";
         File storageDir = mContext.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
         File image = File.createTempFile(
-                gifFileName,  /* prefix */
-                ".gif",         /* suffix */
-                storageDir      /* directory */
+                gifFileName,   //prefix
+                ".gif",          //suffix
+                storageDir       //directory
         );
 
+        /*File storageDir = new File(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_PICTURES), "GIFyourself");
+        File image = new File(storageDir, gifFileName + ".gif");
+*/
         String gifPath = image.getAbsolutePath();
         return gifPath;
+    }
+
+    private File createGifFile() throws IOException {
+        // Create an image file name
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String gifFileName = "GIF_" + timeStamp + "_";
+       /* File storageDir = mContext.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File image = File.createTempFile(
+                gifFileName,  *//* prefix *//*
+                ".gif",         *//* suffix *//*
+                storageDir      *//* directory *//*
+        );*/
+
+        File storageDir = new File(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_PICTURES), "GIFyourself");
+        File image = new File(storageDir, gifFileName + ".gif");
+
+        return image;
     }
 
 

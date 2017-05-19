@@ -1,17 +1,21 @@
 package com.example.moshemandel.gifyourself;
 
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -92,7 +96,22 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this,"image captured",
                     Toast.LENGTH_SHORT).show();
             Intent serverIntent = new Intent(this,GifActivity.class);
-            serverIntent.putExtra("imgPath",mCurrentPhotoPath);
+
+            File origFile = new File(mCurrentPhotoPath);
+            String origFileSize = String.valueOf(origFile.length()/1024);
+            String compressedImgPath = null;
+            try {
+                compressedImgPath = compressImage(mCurrentPhotoPath);
+            } catch(IOException e){
+                Log.d("MainActivity", "IOException!!!!!!");
+            }
+
+            File compressedFile = new File(compressedImgPath);
+            String newFileSize = String.valueOf(compressedFile.length()/1024);
+            Log.d("ServerComm", origFileSize + ", " + newFileSize);
+
+            serverIntent.putExtra("imgPath",compressedImgPath);
+//            serverIntent.putExtra("imgPath",mCurrentPhotoPath);
             startActivity(serverIntent);
             /*File imgFile = new  File(mCurrentPhotoPath);
 
@@ -101,5 +120,29 @@ public class MainActivity extends AppCompatActivity {
                 mImageView.setImageBitmap(imageBitmap);
             }*/
         }
+    }
+
+    private String compressImage(String path) throws IOException {
+        File dir= getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        Bitmap b= BitmapFactory.decodeFile(path);
+        Bitmap out = Bitmap.createScaledBitmap(b, 1080, 1080, false);
+
+        String filename=path.substring(path.lastIndexOf("/")+1, path.lastIndexOf("."));
+        File image = File.createTempFile(
+                filename,  /* prefix */
+                ".jpg",         /* suffix */
+                dir      /* directory */
+        );
+        File file = new File(dir, "resize.png");
+        FileOutputStream fOut;
+        try {
+            fOut = new FileOutputStream(file);
+            out.compress(Bitmap.CompressFormat.JPEG, 100, fOut);
+            fOut.flush();
+            fOut.close();
+            b.recycle();
+            out.recycle();
+        } catch (Exception e) {}
+        return file.getAbsolutePath();
     }
 }

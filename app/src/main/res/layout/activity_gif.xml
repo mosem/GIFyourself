@@ -21,6 +21,17 @@
         android:layout_centerInParent="true"
         android:visibility="gone"/>
 
+    <ImageButton
+        android:id="@+id/imageButton"
+        android:src="@drawable/share_circle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="30dp"
+        android:onClick="shareImage"
+        android:visibility="gone"/>
+
 
 
 </RelativeLayout>
